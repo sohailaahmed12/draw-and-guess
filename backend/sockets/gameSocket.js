@@ -1,6 +1,7 @@
 const Room = require('../game/Room');
 const rooms = new Map();
 const letters=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+const words = require('../game/words');
 
 function generateRoomCode(){
     let roomCode='';
@@ -20,6 +21,7 @@ module.exports = function setupGameSocket(io) {
         theNewRoom.addPlayer(socket.id, playerName);
         socket.join(roomCode);
         socket.emit('room-created', { roomCode });
+        io.to(roomCode).emit('player-list-updated', theNewRoom.players);
     });
 
 socket.on('join-room', ({ roomCode, playerName }) => {
@@ -37,7 +39,26 @@ socket.on('join-room', ({ roomCode, playerName }) => {
   io.to(roomCode).emit('player-list-updated', room.players);
 });
 
-    // event handlers will go here
+socket.on('start-game', ({ roomCode }) => {
+  const room = rooms.get(roomCode);
+  if (!room) {
+    return;
+  }
+  room.startGame(words);
+  io.to(roomCode).emit('game-started', {
+    gamePhase: room.gamePhase,
+    currentDrawerId: room.currentDrawerId,
+    roundNumber: room.roundNumber,
+    players: room.players,
+});
+io.to(room.currentDrawerId).emit('your-word', {
+  word: room.currentWord,
+});
+
+
+});
+
+
 
   });
 };

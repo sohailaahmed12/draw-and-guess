@@ -10,7 +10,38 @@ function generateRoomCode(){
         roomCode=letters[randomIndex]+roomCode
     }
     return roomCode;
-}        
+}  
+function runRoundTimer(room, roomCode, io) {
+  setTimeout(() => {
+    room.endRound();
+
+    io.to(roomCode).emit('round-ended', {
+      word: room.currentWord,
+      players: room.players,
+    });
+
+    if (room.isGameOver()) {
+      io.to(roomCode).emit('game-over', {
+        players: room.players,
+      });
+    } else {
+      room.startNewRound(words);
+
+      io.to(roomCode).emit('game-started', {
+        gamePhase: room.gamePhase,
+        currentDrawerId: room.currentDrawerId,
+        roundNumber: room.roundNumber,
+        players: room.players,
+      });
+
+      io.to(room.currentDrawerId).emit('your-word', {
+        word: room.currentWord,
+      });
+
+      runRoundTimer(room, roomCode, io);
+    }
+  }, 60000);
+}      
 module.exports = function setupGameSocket(io) {
   io.on('connection', (socket) => {
     console.log('A client connected:', socket.id);
@@ -55,9 +86,30 @@ io.to(room.currentDrawerId).emit('your-word', {
   word: room.currentWord,
 });
 
-
+runRoundTimer(room, roomCode, io);
 });
 
+socket.on('submit-guess', ({ roomCode, word }) => {
+  const room = rooms.get(roomCode);
+  if (!room) {
+    return;
+  }
+
+  const isCorrect = room.checkGuess(socket.id, word);
+
+  if (isCorrect) {
+    io.to(roomCode).emit('guess-correct', {
+      playerId: socket.id,
+      players: room.players,
+    });
+  } else {
+    const player = room.players.find((p) => p.id === socket.id);
+    io.to(roomCode).emit('guess-wrong', {
+      playerName: player.name,
+      word: word,
+    });
+  }
+});
 
 
   });

@@ -11,19 +11,27 @@ function generateRoomCode(){
     }
     return roomCode;
 }  
-function runRoundTimer(room, roomCode, io) {
+const roundTimers = new Map();
+
+function startRoundTimer(room, roomCode, io) {
+  const timeoutId = setTimeout(() => {
+    finishRound(room, roomCode, io);
+  }, 60000);
+  roundTimers.set(roomCode, timeoutId);
+}
+
+function finishRound(room, roomCode, io) {
+  room.endRound();
+
+  io.to(roomCode).emit('round-ended', {
+    word: room.currentWord,
+    players: room.players,
+  });
+
   setTimeout(() => {
-    room.endRound();
-
-    io.to(roomCode).emit('round-ended', {
-      word: room.currentWord,
-      players: room.players,
-    });
-
     if (room.isGameOver()) {
-      io.to(roomCode).emit('game-over', {
-        players: room.players,
-      });
+      io.to(roomCode).emit('game-over', { players: room.players });
+      roundTimers.delete(roomCode);
     } else {
       room.startNewRound(words);
 
@@ -38,10 +46,10 @@ function runRoundTimer(room, roomCode, io) {
         word: room.currentWord,
       });
 
-      runRoundTimer(room, roomCode, io);
+      startRoundTimer(room, roomCode, io);
     }
-  }, 60000);
-}      
+  }, 4000); // 4-second pause showing round results before the next round
+}     
 module.exports = function setupGameSocket(io) {
   io.on('connection', (socket) => {
     console.log('A client connected:', socket.id);
@@ -75,6 +83,7 @@ socket.on('start-game', ({ roomCode }) => {
   if (!room) {
     return;
   }
+  if (room.gamePhase !== 'waiting') return;
   room.startGame(words);
   io.to(roomCode).emit('game-started', {
     gamePhase: room.gamePhase,
@@ -86,13 +95,14 @@ io.to(room.currentDrawerId).emit('your-word', {
   word: room.currentWord,
 });
 
-runRoundTimer(room, roomCode, io);
-});
+startRoundTimer(room, roomCode, io);});
 
 socket.on('submit-guess', ({ roomCode, word }) => {
   const room = rooms.get(roomCode);
-  if (!room) {
-    return;
+  if (!room) return;
+
+  if (room.correctGuessersThisRound.includes(socket.id)) {
+    return; // already guessed correctly this round — ignore silently, no broadcast
   }
 
   const isCorrect = room.checkGuess(socket.id, word);
@@ -102,6 +112,12 @@ socket.on('submit-guess', ({ roomCode, word }) => {
       playerId: socket.id,
       players: room.players,
     });
+
+    const nonDrawerCount = room.players.length - 1;
+    if (room.correctGuessersThisRound.length >= nonDrawerCount) {
+      clearTimeout(roundTimers.get(roomCode));
+      finishRound(room, roomCode, io);
+    }
   } else {
     const player = room.players.find((p) => p.id === socket.id);
     io.to(roomCode).emit('guess-wrong', {
@@ -111,6 +127,12 @@ socket.on('submit-guess', ({ roomCode, word }) => {
   }
 });
 
+socket.on('draw-stroke', ({ roomCode, stroke }) => {
+  socket.to(roomCode).emit('draw-stroke', stroke);
+});
 
+socket.on('clear-canvas', ({ roomCode }) => {
+  socket.to(roomCode).emit('clear-canvas');
+});
   });
 };

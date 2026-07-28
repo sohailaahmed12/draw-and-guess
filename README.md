@@ -102,6 +102,6 @@ npm run dev
 - Make sure the frontend and backend are started in separate terminals.
 - If the room code is invalid, double-check the 4-letter code and refresh the page if needed.
 
-## License
+## Author
 
-This project is currently unlicensed.
+Sohaila Ahmed — Biomedical & Healthcare Data Engineering student, Cairo University

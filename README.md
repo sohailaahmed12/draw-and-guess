@@ -1,4 +1,4 @@
-# Draw and Guess
+# Doodle and Guess
 
 A real-time drawing and guessing game built with React, Vite, Express, and Socket.IO.
 

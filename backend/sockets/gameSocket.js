@@ -134,5 +134,26 @@ socket.on('draw-stroke', ({ roomCode, stroke }) => {
 socket.on('clear-canvas', ({ roomCode }) => {
   socket.to(roomCode).emit('clear-canvas');
 });
+socket.on('disconnect', () => {
+  for (const [roomCode, room] of rooms.entries()) {
+    const playerIndex = room.players.findIndex((p) => p.id === socket.id);
+    if (playerIndex !== -1) {
+      const wasDrawer = room.currentDrawerId === socket.id;
+
+      room.players.splice(playerIndex, 1);
+
+      io.to(roomCode).emit('player-list-updated', room.players);
+
+      if (wasDrawer) {
+        room.gamePhase = 'game-over';
+        io.to(roomCode).emit('game-stopped', {
+          message: 'The drawer disconnected — game ended.',
+        });
+      }
+
+      break;
+    }
+  }
+});
   });
 };
